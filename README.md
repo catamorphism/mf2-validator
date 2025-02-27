@@ -40,8 +40,8 @@ make DEBUG=1
 ```
 
 Not usually necessary: to rebuild ICU (for example, if changes have been made upstream), either:
-- Delete the icu_release/ subdirectory and re-run `make` (slow)
-- Go into the icu_release/ subdirectory, run git commands as necessary, `cd ..` and `make` (faster).
+- Delete the icu_release/ subdirectory and re-run `make icu` (slow)
+- Go into the icu_release/ subdirectory, run git commands as necessary, `cd ..` and `make icu` (faster).
 
 ## Running
 
