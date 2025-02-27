@@ -1,0 +1,17 @@
+.input {$numDays :number}
+.input {$count :number}
+.match $numDays $count
+one  one   {{{$numDays} den}}
+one  few   {{{$numDays} den}}
+one  many  {{{$numDays} den}}
+one  other {{{$numDays} den}}
+few  *  {{{$numDays} dny}}
+many one {{{$numDays} dne}}
+many few {{{$numDays} dne}}
+many many {{{$numDays} dne}}
+many other {{{$numDays} dne}}
+other one {{{$numDays} dni}}
+other few {{{$numDays} dni}}
+other many {{{$numDays} dni}}
+other other {{{$numDays} dni}}
+* *    {{{$numDays} dní}}

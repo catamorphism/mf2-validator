@@ -1,0 +1,6 @@
+.input {$numDays :number}
+.match $numDays
+one   {{{$numDays} den}}
+few   {{{$numDays} dny}}
+many  {{{$numDays} dne}}
+other {{{$numDays} dni}}

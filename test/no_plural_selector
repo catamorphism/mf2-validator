@@ -1,0 +1,5 @@
+.input {$numDays :func}
+.match $numDays
+one   {{{$numDays} day}}
+other {{{$numDays} days}}
+*     {{{$numDays} days}}
