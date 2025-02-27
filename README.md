@@ -66,3 +66,5 @@ make test
 ## TODO
 
 * Checking that source and target have same set of placeholders
+* The Makefile assumes we are building on Linux/clang when building ICU. This would need to be changed
+to enable building on Windows/etc.
