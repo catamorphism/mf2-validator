@@ -1,3 +1,19 @@
+mf2validate is a C++ program that compares two MessageFormat 2.0 messages, presumably but not
+necessarily in different languages, and checks that plural selectors are used in a consistent
+way. It checks that:
+
+  * every plural category is present in the `.match` construct, or for multiple selectors,
+    every permutation of plural categories is present
+  * every plural category (or permutation) is _explicitly_ present (key sets like `few *`
+    are prohibited)
+  * every key is a valid plural category for the given locale
+
+The validator only handles messages that only use the plural selector, called `:number`.
+Messages that use other selector functions will fail, as the set of possible keys for
+matching is unknown.
+
+For more about MessageFormat 2.0, see https://github.com/unicode-org/message-format-wg
+
 ## Prerequisites
 
 Before doing anything else, run:
