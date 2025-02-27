@@ -41,3 +41,5 @@ doTest "English_message_good" "Czech_partial_wildcards" 9
 doTest "English_message_good" "Czech_message_variant_key_mismatch" 4
 # Message with missing selector annotation
 doTest "English_message_good" "Czech_message_missing_selector_annotation" 4
+# Message with aliased selector variable
+doTest "English_message_alias" "Czech_message_alias" 0

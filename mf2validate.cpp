@@ -278,7 +278,13 @@ bool isPluralSelector(const MFDataModel& dataModel,
             const Expression& rhs = it->getValue();
             const Operator* rator = rhs.getOperator(status);
             if (U_FAILURE(status)) {
-                return false; // This means `variableName`'s RHS is unannotated
+                // Also need to handle aliasing: we could have
+                // .local $x = {$y} where $y has a selector annotation
+                if (rhs.getOperand().isVariable()) {
+                    return isPluralSelector(dataModel, rhs.getOperand().asVariable());
+                }
+                // Otherwise, RHS must be an unannotated literal
+                return false;
             }
             if (rator->getFunctionName() == UnicodeString("number")) {
                 return true;
