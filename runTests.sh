@@ -43,3 +43,6 @@ doTest "English_message_good" "Czech_message_variant_key_mismatch" 4
 doTest "English_message_good" "Czech_message_missing_selector_annotation" 4
 # Message with aliased selector variable
 doTest "English_message_alias" "Czech_message_alias" 0
+# Message with additional cases that aren't plural categories (see README)
+doTest "English_message_valid_but_rejected" "Czech_message_valid_but_rejected" 1
+

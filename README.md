@@ -12,6 +12,22 @@ The validator only handles messages that only use the plural selector, called `:
 Messages that use other selector functions will fail, as the set of possible keys for
 matching is unknown.
 
+The validator also assumes that `:number` is only used for plural matching. In fact,
+some messages use it for numeric matching. For example, the following is a perfectly
+good message:
+
+.input {$numDays :number}
+.match $numDays
+1     {{{$numDays} day}}
+one   {{{$numDays} day}}
+2     {{two days}}
+other {{{$numDays} days}}
+*     {{{$numDays} days}}
+
+but the validator will reject it because it contains additional cases that are not
+CLDR plural categories for English (the variants with keys "1" and "2").
+
+
 For more about MessageFormat 2.0, see https://github.com/unicode-org/message-format-wg
 
 ## Prerequisites
