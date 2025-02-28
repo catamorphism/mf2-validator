@@ -25,22 +25,6 @@ using namespace std;
 
 bool quiet;
 
-bool testMessageFormat() {
-    UErrorCode errorCode = U_ZERO_ERROR;
-    UParseError parseError;
-
-    MessageFormatter::Builder builder(errorCode);
-    MessageFormatter mf = builder.setPattern(u"Hello, {$userName}!", parseError, errorCode)
-        .build(errorCode);
-
-    std::map<UnicodeString, message2::Formattable> argMap;
-    argMap["userName"] = message2::Formattable("John");
-    MessageArguments args(argMap, errorCode);
-
-    UnicodeString result = mf.formatToString(args, errorCode);
-    return (result == "Hello, John!");
-}
-
 void log(std::string s) {
     if (!quiet) {
         cout << s << endl;
