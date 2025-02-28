@@ -45,4 +45,8 @@ doTest "English_message_good" "Czech_message_missing_selector_annotation" 4
 doTest "English_message_alias" "Czech_message_alias" 0
 # Message with additional cases that aren't plural categories (see README)
 doTest "English_message_valid_but_rejected" "Czech_message_valid_but_rejected" 1
-
+# Messages with inconsistent placeholders
+doTest "English_message_good" "Czech_message_inconsistent_placeholders" 10
+# Source message with different placeholders in different variants
+# (Warns, but doesn't fail)
+doTest "English_message_varying_variants" "Czech_message_good" 0

@@ -1,6 +1,14 @@
+# Validation
+
 mf2validate is a C++ program that compares two MessageFormat 2.0 messages, presumably but not
 necessarily in different languages, and checks that plural selectors are used in a consistent
-way. It checks that:
+way.
+
+For more about MessageFormat 2.0, see https://github.com/unicode-org/message-format-wg
+
+## Plural category checking
+
+The validator checks that:
 
   * every plural category is present in the `.match` construct, or for multiple selectors,
     every permutation of plural categories is present
@@ -27,8 +35,35 @@ other {{{$numDays} days}}
 but the validator will reject it because it contains additional cases that are not
 CLDR plural categories for English (the variants with keys "1" and "2").
 
+## Placeholder checking
 
-For more about MessageFormat 2.0, see https://github.com/unicode-org/message-format-wg
+The validator also checks that all the placeholders used in the source message are
+present in the target message. It assumes that each variant in the source message
+uses the same set of placeholders (and prints a warning if this assumption is violated).
+Then, it checks that each variant in the target message uses that set of placeholders.
+
+For example, if the source message is:
+
+.input {$numDays :number}
+.match $numDays
+one   {{{$numDays} day}}
+other {{{$numDays} days}}
+*     {{{$numDays} days}}
+
+and the target message is:
+
+.input {$numDays :number}
+.match $numDays
+one   {{{$numDays} den}}
+few   {{{$numDays} dny}}
+many  {{{$numDays} dne}}
+other {{numDays dni}}
+*     {{{$numDays} dní}}
+
+then the target message is rejected, because its `other` variant does not contain
+the placeholder `$numDays`.
+
+# Usage
 
 ## Prerequisites
 

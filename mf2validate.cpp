@@ -20,6 +20,7 @@ using namespace std;
 #define ASSERTION_FAILED 7
 #define IO_ERROR 8
 #define PARTIAL_WILDCARDS 9
+#define INCONSISTENT_PLACEHOLDERS 10
 
 bool testMessageFormat() {
     UErrorCode errorCode = U_ZERO_ERROR;
@@ -331,7 +332,7 @@ bool keysEqual(const std::vector<Key>& variantKeys,
     return true;
 }
 
-std::string keysToString(const std::vector<UnicodeString>& keys) {
+std::string uStrsToString(const std::vector<UnicodeString>& keys) {
     std::string result;
     bool first = true;
 
@@ -344,6 +345,15 @@ std::string keysToString(const std::vector<UnicodeString>& keys) {
         result += it->toUTF8String(temp);
     }
     return result;
+}
+
+std::string keysToString(const std::vector<Key>& keys) {
+    std::vector<UnicodeString> strings;
+
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
+        strings.push_back(keyToString(*it));
+    }
+    return uStrsToString(strings);
 }
 
 bool variantExistsFor(const std::vector<Variant>& variants,
@@ -365,7 +375,7 @@ bool variantExistsFor(const std::vector<Variant>& variants,
         }
     }
     cout << "Omitted variant: ";
-    cout << keysToString(keys);
+    cout << uStrsToString(keys);
     cout << "\n";
     return false;
 }
@@ -406,12 +416,13 @@ void checkDataModelErrors(MessageFormatter& mf) {
     }
 }
 
-bool checkPluralCategories(const Locale& locale, bool isSource, std::string message) {
+MFDataModel getDataModel(const Locale& locale, std::string message) {
     UErrorCode errorCode = U_ZERO_ERROR;
     UParseError parseError;
 
     MessageFormatter::Builder builder(errorCode);
-    MessageFormatter mf = builder.setPattern(UnicodeString(message.c_str()), parseError, errorCode)
+    MessageFormatter mf = builder.setPattern(UnicodeString(message.c_str()),
+                                             parseError, errorCode)
         .setLocale(locale)
         // Need strict error handling so we can detect data model errors
         .setErrorHandlingBehavior(MessageFormatter::U_MF_STRICT)
@@ -425,7 +436,14 @@ bool checkPluralCategories(const Locale& locale, bool isSource, std::string mess
 
     checkDataModelErrors(mf);
 
-    MFDataModel dataModel = mf.getDataModel();
+    return mf.getDataModel();
+}
+
+bool checkPluralCategories(const Locale& locale, bool isSource, std::string message) {
+    UErrorCode errorCode = U_ZERO_ERROR;
+
+    MFDataModel dataModel = getDataModel(locale, message);
+
     std::vector<VariableName> selectors = dataModel.getSelectors();
     int numSelectors = selectors.size();
     if (numSelectors == 0) {
@@ -505,8 +523,77 @@ bool checkPluralCategories(const Locale& locale, bool isSource, std::string mess
     return allOK;
 }
 
+std::vector<UnicodeString> collectPlaceholders(const MFDataModel& dataModel) {
+    // This collects the placeholders from the first variant,
+    // then warns if any other variants use different placeholders.
+    std::vector<Variant> variants = dataModel.getVariants();
+    std::vector<UnicodeString> placeholders;
+    bool first = true;
+    for (auto variant = variants.begin(); variant != variants.end(); ++variant) {
+        const Pattern& pat = variant->getPattern();
+        for (auto patternPart = pat.begin(); patternPart != pat.end(); ++patternPart) {
+            if (std::holds_alternative<Expression>(*patternPart)) {
+                const Expression& expr = std::get<Expression>(*patternPart);
+                 if (expr.getOperand().isVariable()) {
+                     const VariableName& placeholder = expr.getOperand().asVariable();
+                     if (!contains(placeholders, placeholder) && !first) {
+                         logError("Warning: not all variants in source message\
+ contain the same set of placeholders. The placeholder $");
+                         uLogError(placeholder);
+                         logError(" does not appear in every variant.\n");
+                     } else if (first) {
+                         placeholders.push_back(expr.getOperand().asVariable());
+                     }
+                }
+            }
+        }
+        first = false;
+    }
+    return placeholders;
+}
+
+bool variantContains(const Variant& variant, const UnicodeString& placeholder) {
+    const Pattern& pat = variant.getPattern();
+    for (auto patternPart = pat.begin(); patternPart != pat.end(); ++patternPart) {
+        if (std::holds_alternative<Expression>(*patternPart)) {
+            const Expression& expr = std::get<Expression>(*patternPart);
+            if (expr.getOperand().isVariable()) {
+                if (expr.getOperand().asVariable() == placeholder) {
+                    return true;
+                }
+
+            }
+        }
+    }
+    return false;
+}
+
+bool checkPlaceholders(const Locale& sourceLocale, const Locale& targetLocale,
+                       std::string sourceMessage, std::string targetMessage) {
+    MFDataModel sourceDataModel = getDataModel(sourceLocale, sourceMessage);
+    MFDataModel targetDataModel = getDataModel(targetLocale, targetMessage);
+    // TODO: checkPluralCategories already parsed the messages, so we should reuse
+    // the data models. Refactor
+
+    std::vector<UnicodeString> sourcePlaceholders = collectPlaceholders(sourceDataModel);
+    std::vector<Variant> targetVariants = targetDataModel.getVariants();
+    for (auto variant = targetVariants.begin(); variant != targetVariants.end(); ++variant) {
+        for (auto it = sourcePlaceholders.begin(); it != sourcePlaceholders.end(); ++it) {
+            if (!variantContains(*variant, *it)) {
+                logError("In target message, variant with keys «");
+                logError(keysToString(variant->getKeys().getKeys()));
+                logError("» omits placeholder: $");
+                uLogError(*it);
+                logError("\n");
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 void reportResults(const Locale& sourceLocale, const Locale& targetLocale,
-                   bool sourceOK, bool targetOK) {
+                   bool sourceOK, bool targetOK, bool placeholdersOK) {
     cout << "Source locale: ";
     cout << localeToString(sourceLocale);
     cout << "\n";
@@ -525,6 +612,12 @@ void reportResults(const Locale& sourceLocale, const Locale& targetLocale,
         cout << "Target message covers all plural categories.\n";
     } else {
         cout << "Target message does not cover all plural categories, or has extraneous categories.\n";
+    }
+
+    if (placeholdersOK) {
+        cout << "All variants in target message include placeholders from source message.\n";
+    } else {
+        cout << "One or more variants in target message omit placeholders from target message.\n";
     }
 }
 
@@ -551,9 +644,14 @@ int main(int argc, char** argv) {
     bool sourceOK = checkPluralCategories(sourceLocale, true, sourceMessage);
     cout << "== Checking target message ==\n";
     bool targetOK = checkPluralCategories(targetLocale, false, targetMessage);
+    cout << "== Checking placeholder consistency ==\n";
+    bool placeholdersOK = checkPlaceholders(sourceLocale, targetLocale,
+                                            sourceMessage, targetMessage);
 
     cout << "== Results ==\n";
-    reportResults(sourceLocale, targetLocale, sourceOK, targetOK);
+    reportResults(sourceLocale, targetLocale, sourceOK, targetOK, placeholdersOK);
 
-    return (sourceOK && targetOK) ? 0 : MISSING_PLURAL_CATEGORY;
+    return (sourceOK && targetOK && placeholdersOK) ? 0
+        : !placeholdersOK ? INCONSISTENT_PLACEHOLDERS
+        : MISSING_PLURAL_CATEGORY;
 }
