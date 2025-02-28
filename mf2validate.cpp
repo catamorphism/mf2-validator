@@ -433,10 +433,8 @@ MFDataModel getDataModel(const Locale& locale, std::string message) {
     return mf.getDataModel();
 }
 
-bool checkPluralCategories(const Locale& locale, bool isSource, std::string message) {
+bool checkPluralCategories(const Locale& locale, bool isSource, const MFDataModel& dataModel) {
     UErrorCode errorCode = U_ZERO_ERROR;
-
-    MFDataModel dataModel = getDataModel(locale, message);
 
     std::vector<VariableName> selectors = dataModel.getSelectors();
     int numSelectors = selectors.size();
@@ -559,13 +557,7 @@ bool variantContains(const Variant& variant, const UnicodeString& placeholder) {
     return false;
 }
 
-bool checkPlaceholders(const Locale& sourceLocale, const Locale& targetLocale,
-                       std::string sourceMessage, std::string targetMessage) {
-    MFDataModel sourceDataModel = getDataModel(sourceLocale, sourceMessage);
-    MFDataModel targetDataModel = getDataModel(targetLocale, targetMessage);
-    // TODO: checkPluralCategories already parsed the messages, so we should reuse
-    // the data models. Refactor
-
+bool checkPlaceholders(const MFDataModel& sourceDataModel, const MFDataModel& targetDataModel) {
     std::vector<UnicodeString> sourcePlaceholders = collectPlaceholders(sourceDataModel);
     std::vector<Variant> targetVariants = targetDataModel.getVariants();
     for (auto variant = targetVariants.begin(); variant != targetVariants.end(); ++variant) {
@@ -626,13 +618,15 @@ int main(int argc, char** argv) {
         echoOptions(sourceLocale, targetLocale, sourceMessage, targetMessage);
     }
 
+    MFDataModel sourceDataModel = getDataModel(sourceLocale, sourceMessage);
+    MFDataModel targetDataModel = getDataModel(targetLocale, targetMessage);
+
     log("== Checking source message ==");
-    bool sourceOK = checkPluralCategories(sourceLocale, true, sourceMessage);
+    bool sourceOK = checkPluralCategories(sourceLocale, true, sourceDataModel);
     log("== Checking target message ==");
-    bool targetOK = checkPluralCategories(targetLocale, false, targetMessage);
+    bool targetOK = checkPluralCategories(targetLocale, false, targetDataModel);
     log("== Checking placeholder consistency ==");
-    bool placeholdersOK = checkPlaceholders(sourceLocale, targetLocale,
-                                            sourceMessage, targetMessage);
+    bool placeholdersOK = checkPlaceholders(sourceDataModel, targetDataModel);
 
     log("== Results ==");
     reportResults(sourceLocale, targetLocale, sourceOK, targetOK, placeholdersOK);
