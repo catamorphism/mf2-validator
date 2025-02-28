@@ -2,7 +2,7 @@ all: mf2validate
 
 rootdir = $(realpath .)
 ICU_DIR=$(rootdir)/icu_release
-DEBUG ?= 1
+DEBUG ?= 0
 CXXFLAGS += -std=c++20
 
 ifeq ($(DEBUG), 1)
