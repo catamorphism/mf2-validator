@@ -3,8 +3,10 @@ all: mf2validate
 rootdir = $(realpath .)
 ICU_DIR=$(rootdir)/icu_release
 DEBUG ?= 1
+CXXFLAGS += -std=c++20
+
 ifeq ($(DEBUG), 1)
-	CXXFLAGS += -g
+	CXXFLAGS += -g -DDEBUG
 	ICUCONFIGUREFLAGS += --enable-debug --disable-release
 else
 	ICUCONFIGUREFLAGS += --enable-release --disable-debug

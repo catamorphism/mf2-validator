@@ -1,3 +1,4 @@
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <math.h>
@@ -22,6 +23,8 @@ using namespace std;
 #define PARTIAL_WILDCARDS 9
 #define INCONSISTENT_PLACEHOLDERS 10
 
+bool quiet;
+
 bool testMessageFormat() {
     UErrorCode errorCode = U_ZERO_ERROR;
     UParseError parseError;
@@ -38,17 +41,15 @@ bool testMessageFormat() {
     return (result == "Hello, John!");
 }
 
-void logError(std::string s) {
-    cout << s;
+void log(std::string s) {
+    if (!quiet) {
+        cout << s << endl;
+    }
 }
 
-void logError(int32_t i) {
-    cout << i;
-}
-
-void uLogError(const UnicodeString& uStr) {
+std::string fromUStr(const UnicodeString& uStr) {
     std::string str;
-    cout << uStr.toUTF8String(str);
+    return uStr.toUTF8String(str);
 }
 
 std::string readFile(std::string filename) {
@@ -56,9 +57,7 @@ std::string readFile(std::string filename) {
     std::string line;
     std::string contents;
     if (!file) {
-        logError("Error reading from file: ");
-        logError(filename);
-        logError("\n");
+        log(format("Error reading from file {}", filename));
         exit(IO_ERROR);
     }
     while (std::getline(file, line)) {
@@ -80,11 +79,12 @@ std::string localeToString(const Locale& locale) {
 void getOptions(int argc, char** argv,
                 Locale& sourceLocale, Locale& targetLocale,
                 std::string& sourceFilename, std::string& targetFilename,
-                bool& verbose) {
+                bool& verbose, bool& quiet) {
     cxxopts::Options options("mf2validate", "Validate a source and target MF2 message");
     options.add_options()
         ("h,help", "Print out help message", cxxopts::value<bool>()->default_value("false"))
         ("verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+        ("q,quiet", "Suppress all output", cxxopts::value<bool>()->default_value("false"))
         ("sourceLocale", "Locale for source message", cxxopts::value<std::string>()->default_value(""))
         ("targetLocale", "Locale for target message", cxxopts::value<std::string>()->default_value(""))
         ("sourceFilename", "File name for source message", cxxopts::value<std::string>()->default_value(""))
@@ -94,33 +94,34 @@ void getOptions(int argc, char** argv,
     try {
         sourceLocale = Locale(result["sourceLocale"].as<std::string>().c_str());
     } catch (const cxxopts::exceptions::exception& e) {
-        logError("Must provide --sourceLocale flag");
+        log("Must provide --sourceLocale flag");
         throw(e);
     }
 
     try {
         targetLocale = Locale(result["targetLocale"].as<std::string>().c_str());
     } catch (const cxxopts::exceptions::exception& e) {
-        logError("Must provide --targetLocale flag");
+        log("Must provide --targetLocale flag");
         throw(e);
     }
 
     try {
         sourceFilename = result["sourceFilename"].as<std::string>();
     } catch (const cxxopts::exceptions::exception& e) {
-        logError("Must provide --sourceFilename flag");
+        log("Must provide --sourceFilename flag");
         throw(e);
     }
 
     try {
         targetFilename = result["targetFilename"].as<std::string>();
     } catch (const cxxopts::exceptions::exception& e) {
-        logError("Must provide --targetFilename flag");
+        log("Must provide --targetFilename flag");
         throw(e);
     }
 
     verbose = result["verbose"].as<bool>();
     bool help = result["help"].as<bool>();
+    quiet = result["quiet"].as<bool>();
 
     if (help) {
         cout << options.help() << endl;
@@ -139,10 +140,9 @@ void echoOptions(const Locale& sourceLocale, const Locale& targetLocale,
     cout << targetMessage;
 }
 
-void checkICUError(UErrorCode errorCode, std::string errorMessage, const Locale& locale) {
+void checkICUError(UErrorCode errorCode, std::string errorMessage) {
     if (U_FAILURE(errorCode)) {
-        logError(errorMessage);
-        logError(localeToString(locale));
+        log(errorMessage);
         exit(ICU_INTERNAL_ERROR);
     }
 }
@@ -226,14 +226,14 @@ std::vector<std::vector<UnicodeString>> generatePermutations(int len, std::vecto
     return dedup(result);
 }
 
-std::vector<UnicodeString> stringEnumerationToVector(const Locale& locale, StringEnumeration& strings) {
+std::vector<UnicodeString> stringEnumerationToVector(StringEnumeration& strings) {
     UErrorCode errorCode = U_ZERO_ERROR;
 
     const UnicodeString* category;
     std::vector<UnicodeString> stringVector;
     while ((category = strings.snext(errorCode)) != nullptr) {
-        checkICUError(errorCode, "Internal error iterating over plural categories", locale);
-
+        checkICUError(errorCode,
+                      format("Internal error iterating over plural categories"));
         stringVector.push_back(*category);
     }
 
@@ -255,11 +255,8 @@ bool checkValidKeys(const Locale& locale,
             }
             UnicodeString ks = keyToString(*k);
             if (!contains<UnicodeString>(pluralCategories, ks)) {
-                logError("Key ");
-                uLogError(ks);
-                logError(" is not a valid plural category for locale ");
-                logError(localeToString(locale));
-                logError("\n");
+                log(format("Key {} is not a valid plural category for locale {}.",
+                                fromUStr(ks), localeToString(locale)));
                 return false;
             }
         }
@@ -361,7 +358,7 @@ bool variantExistsFor(const std::vector<Variant>& variants,
     for (auto it = variants.begin(); it != variants.end(); ++it) {
         const std::vector<Key> sKeys = it->getKeys().getKeys();
         if (sKeys.size() != keys.size()) {
-            logError("Warning: variant has fewer keys than there are selectors");
+            log("Warning: variant has fewer keys than there are selectors");
             return false;
         }
         if (allWildcards(sKeys)) {
@@ -374,9 +371,7 @@ bool variantExistsFor(const std::vector<Variant>& variants,
             return true;
         }
     }
-    cout << "Omitted variant: ";
-    cout << uStrsToString(keys);
-    cout << "\n";
+    log(format("Omitted variant: {}", uStrsToString(keys)));
     return false;
 }
 
@@ -394,15 +389,15 @@ void checkDataModelErrors(MessageFormatter& mf) {
     if (U_FAILURE(errorCode)) {
         switch (errorCode) {
         case U_MF_VARIANT_KEY_MISMATCH_ERROR:
-            logError("Data model error: One or more variants has a different number of keys from the number of selectors.\n");
+            log("Data model error: One or more variants has a different number of keys from the number of selectors.\n");
             dataModelError = true;
             break;
         case U_MF_NONEXHAUSTIVE_PATTERN_ERROR:
-            logError("Data model error: Missing '*' variant.\n");
+            log("Data model error: Missing '*' variant.\n");
             dataModelError = true;
             break;
         case U_MF_MISSING_SELECTOR_ANNOTATION_ERROR:
-            logError("Data model error: A selector variable refers to an expression with no annotation.\n");
+            log("Data model error: A selector variable refers to an expression with no annotation.\n");
             dataModelError = true;
             break;
         default:
@@ -429,8 +424,7 @@ MFDataModel getDataModel(const Locale& locale, std::string message) {
         .build(errorCode);
 
     if (U_FAILURE(errorCode)) {
-        logError("Couldn't parse message ");
-        logError(message);
+        log(format("Couldn't parse message {}", message));
         exit(PARSE_ERROR);
     }
 
@@ -447,19 +441,20 @@ bool checkPluralCategories(const Locale& locale, bool isSource, std::string mess
     std::vector<VariableName> selectors = dataModel.getSelectors();
     int numSelectors = selectors.size();
     if (numSelectors == 0) {
-        logError("Warning: ");
-        logError(isSource ? "source" : "target");
-        logError(" message is not made up of a .match construct. Trivially correct.\n");
+        log(format("Warning: {} message is not made up of a .match construct. Trivially correct.",
+                        isSource ? "source" : "target"));
         return true;
     }
 
     std::vector<Variant> variants = dataModel.getVariants();
     // Get plural rules for this locale
     LocalPointer<PluralRules> pluralRules(PluralRules::forLocale(locale, errorCode));
-    checkICUError(errorCode, "Error getting plural rules for locale", locale);
+    checkICUError(errorCode, format("Error getting plural rules for locale {}",
+                                    localeToString(locale)));
 
     LocalPointer<StringEnumeration> pluralCategoriesEnumeration(pluralRules->getKeywords(errorCode));
-    checkICUError(errorCode, "Error getting categories from plural rules for locale", locale);
+    checkICUError(errorCode, format("Error getting categories from plural rules for locale {}",
+                                    localeToString(locale)));
 
     // Check that all selectors are plural; if any are non-plural, we can't check
     // how many variants there should be
@@ -471,7 +466,7 @@ bool checkPluralCategories(const Locale& locale, bool isSource, std::string mess
         }
     }
     if (!allPlural) {
-        logError("Message uses non-plural selectors. Can't check exhaustiveness.\n");
+        log("Message uses non-plural selectors. Can't check exhaustiveness.\n");
         exit(NON_PLURAL_SELECTORS);
     }
 
@@ -479,37 +474,33 @@ bool checkPluralCategories(const Locale& locale, bool isSource, std::string mess
     // and some aren't)
     for (auto it = variants.begin(); it != variants.end(); ++it) {
         if (partialWildcards(it->getKeys().getKeys())) {
-            logError("Partial wildcard variant is present; not all permutations of categories are explicitly enumerated.\n");
+            log("Partial wildcard variant is present; not all permutations of categories are explicitly enumerated.\n");
             exit(PARTIAL_WILDCARDS);
         }
     }
 
     // Convert pluralCategoriesEnumeration to a vector for convenience
-    std::vector<UnicodeString> pluralCategories = stringEnumerationToVector(locale, *pluralCategoriesEnumeration);
+    std::vector<UnicodeString> pluralCategories = stringEnumerationToVector(*pluralCategoriesEnumeration);
 
     // Generate all n-permutations of plural categories, where n is the number of selectors
     std::vector<std::vector<UnicodeString>> permutations = generatePermutations(numSelectors, pluralCategories);
     // Consistency check
+#ifdef DEBUG
     int categoryCount = pluralCategories.size();
     int expectedPerms = perms(categoryCount, numSelectors);
     if (permutations.size() != expectedPerms) {
-        logError("Error calculating permutations of plural categories (this is a bug)\n");
-        logError("Actual size: ");
-        logError(permutations.size());
-        logError("\nExpected size: ");
-        logError(expectedPerms);
-        logError("\n");
+        log(format("Error calculating permutations of plural categories (this is a bug)\n\
+Actual size: {}\nExpected size: {}\n", permutations.size(), expectedPerms));
         exit(ASSERTION_FAILED);
     }
+#endif
 
     bool allOK = true;
     // Check that the number of variants == the number of permutations plus 1
     if (variants.size() != permutations.size() + 1) {
-        logError("Incorrect number of variants; there are ");
-        logError(variants.size());
-        logError(" and should be ");
-        logError(permutations.size() + 1);
-        logError(" including the wildcard variant.\n");
+        log(format("Incorrect number of variants; there are {} and should\
+ be {} including the wildcard variant.",
+                        variants.size(), permutations.size() + 1));
         allOK = false;
     }
 
@@ -537,10 +528,10 @@ std::vector<UnicodeString> collectPlaceholders(const MFDataModel& dataModel) {
                  if (expr.getOperand().isVariable()) {
                      const VariableName& placeholder = expr.getOperand().asVariable();
                      if (!contains(placeholders, placeholder) && !first) {
-                         logError("Warning: not all variants in source message\
- contain the same set of placeholders. The placeholder $");
-                         uLogError(placeholder);
-                         logError(" does not appear in every variant.\n");
+                         log(format("Warning: not all variants in source message\
+ contain the same set of placeholders. The placeholder ${} does not appear in\
+ every variant.",
+                                         fromUStr(placeholder)));
                      } else if (first) {
                          placeholders.push_back(expr.getOperand().asVariable());
                      }
@@ -580,11 +571,8 @@ bool checkPlaceholders(const Locale& sourceLocale, const Locale& targetLocale,
     for (auto variant = targetVariants.begin(); variant != targetVariants.end(); ++variant) {
         for (auto it = sourcePlaceholders.begin(); it != sourcePlaceholders.end(); ++it) {
             if (!variantContains(*variant, *it)) {
-                logError("In target message, variant with keys «");
-                logError(keysToString(variant->getKeys().getKeys()));
-                logError("» omits placeholder: $");
-                uLogError(*it);
-                logError("\n");
+                log(format("In target message, variant with keys «{}» omits placeholder: ${}",
+                                keysToString(variant->getKeys().getKeys()), fromUStr(*it)));
                 return false;
             }
         }
@@ -594,30 +582,28 @@ bool checkPlaceholders(const Locale& sourceLocale, const Locale& targetLocale,
 
 void reportResults(const Locale& sourceLocale, const Locale& targetLocale,
                    bool sourceOK, bool targetOK, bool placeholdersOK) {
-    cout << "Source locale: ";
-    cout << localeToString(sourceLocale);
-    cout << "\n";
+    log(format("Source locale: {}",
+               localeToString(sourceLocale)));
 
     if (sourceOK) {
-        cout << "Source message covers all plural categories.\n";
+        log("Source message covers all plural categories.");
     } else {
-        cout << "Source message does not cover all plural categories, or has extraneous categories.\n";
+        log("Source message does not cover all plural categories, or has extraneous categories.");
     }
 
-    cout << "Target locale: ";
-    cout << localeToString(targetLocale);
-    cout << "\n";
+    log(format("Target locale: {}",
+               localeToString(targetLocale)));
 
     if (targetOK) {
-        cout << "Target message covers all plural categories.\n";
+        log("Target message covers all plural categories.");
     } else {
-        cout << "Target message does not cover all plural categories, or has extraneous categories.\n";
+        log("Target message does not cover all plural categories, or has extraneous categories.");
     }
 
     if (placeholdersOK) {
-        cout << "All variants in target message include placeholders from source message.\n";
+        log("All variants in target message include placeholders from source message.");
     } else {
-        cout << "One or more variants in target message omit placeholders from target message.\n";
+        log("One or more variants in target message omit placeholders from target message.");
     }
 }
 
@@ -631,7 +617,7 @@ int main(int argc, char** argv) {
     // --locale_source --locale_target --message_source --message_target
     // first two flags are locale tags; second two are filenames
     getOptions(argc, argv, sourceLocale, targetLocale,
-               sourceFilename, targetFilename, verbose);
+               sourceFilename, targetFilename, verbose, quiet);
 
     std::string sourceMessage = readFile(sourceFilename);
     std::string targetMessage = readFile(targetFilename);
@@ -640,15 +626,15 @@ int main(int argc, char** argv) {
         echoOptions(sourceLocale, targetLocale, sourceMessage, targetMessage);
     }
 
-    cout << "== Checking source message ==\n";
+    log("== Checking source message ==");
     bool sourceOK = checkPluralCategories(sourceLocale, true, sourceMessage);
-    cout << "== Checking target message ==\n";
+    log("== Checking target message ==");
     bool targetOK = checkPluralCategories(targetLocale, false, targetMessage);
-    cout << "== Checking placeholder consistency ==\n";
+    log("== Checking placeholder consistency ==");
     bool placeholdersOK = checkPlaceholders(sourceLocale, targetLocale,
                                             sourceMessage, targetMessage);
 
-    cout << "== Results ==\n";
+    log("== Results ==");
     reportResults(sourceLocale, targetLocale, sourceOK, targetOK, placeholdersOK);
 
     return (sourceOK && targetOK && placeholdersOK) ? 0

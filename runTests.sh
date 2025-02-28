@@ -1,8 +1,14 @@
 #!/bin/bash
 
+if [[ $1 == "--verbose" ]]; then
+    QUIET=""
+else
+    QUIET=-q
+fi
+
 doTest() {
     # For now, use a fixed source and target locale for all tests
-    bash mf2validate.sh --sourceLocale=en-US --targetLocale=cs-CZ --sourceFilename=test/$1 --targetFilename=test/$2 >& /dev/null
+    bash mf2validate.sh $QUIET --sourceLocale=en-US --targetLocale=cs-CZ --sourceFilename=test/$1 --targetFilename=test/$2
     exitCode=$?
     if [ $exitCode != $3 ]; then
         echo "*** Test failed ***: ($1, $2); expected $3 and got $exitCode"
@@ -11,6 +17,8 @@ doTest() {
     fi
 }
 
+# Nonexistent file
+doTest "bogus" "English_message_good" 8
 # Good source and target
 doTest "English_message_good" "Czech_message_good" 0
 # Good source, bad target
