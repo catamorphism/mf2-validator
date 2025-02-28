@@ -67,6 +67,8 @@ the placeholder `$numDays`.
 
 ## Prerequisites
 
+clang version 17 or greater must be installed.
+
 Before doing anything else, run:
 
 ```

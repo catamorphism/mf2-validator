@@ -13,9 +13,18 @@ else
 endif
 
 CXX = clang++ $(CXXFLAGS)
+CLANGVERSION = $(shell bash getclangversion.sh)
 
-mf2validate: mf2validate.cpp
+mf2validate: mf2validate.cpp checkversion
 	$(CXX) -Ithird_party -I$(ICU_DIR)/usr/local/include -L$(ICU_DIR)/usr/local/lib -licuuc -licudata -licui18n -o mf2validate mf2validate.cpp
+
+.PHONY: checkversion
+.SILENT: checkversion
+checkversion:
+	if [ $(CLANGVERSION) -lt 17 ]; then \
+		echo "Error: Found Clang version $(CLANGVERSION). Version 17 or greater is required." ; \
+		exit 1; \
+	fi
 
 test: mf2validate
 	bash runTests.sh
