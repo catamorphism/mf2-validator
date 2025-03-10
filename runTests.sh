@@ -58,3 +58,7 @@ doTest "English_message_good" "Czech_message_inconsistent_placeholders" 10
 # Source message with different placeholders in different variants
 # (Warns, but doesn't fail)
 doTest "English_message_varying_variants" "Czech_message_good" 0
+# Missing "other" variant -- shouldn't be an error if there's a '*'
+doTest "English_message_missing_other" "Czech_message_missing_other" 0
+# Missing "other other" variant with 2 selectors
+doTest "English_message_missing_other_2" "Czech_message_missing_other_2" 0

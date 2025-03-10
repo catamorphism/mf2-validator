@@ -1,0 +1,7 @@
+.input {$numDays :number}
+.input {$count :number}
+.match $numDays $count
+one   one    {{{$numDays} day}}
+one    other {{{$numDays} days}}
+other  one   {{{$numDays} days}}
+*    *       {{{$numDays} days}}

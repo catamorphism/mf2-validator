@@ -337,8 +337,46 @@ std::string keysToString(const std::vector<Key>& keys) {
     return uStrsToString(strings);
 }
 
+bool allOther(const std::vector<UnicodeString>& keys) {
+    UnicodeString other("other");
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
+        if (*it != other) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool allOther(const std::vector<Key>& keys) {
+    UnicodeString other("other");
+    for (auto it = keys.begin(); it != keys.end(); ++it) {
+        if (it->isWildcard()) {
+            return false;
+        }
+        if (keyToString(*it) != other) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool missingOtherVariant(const std::vector<Variant>& variants) {
+    for (auto it = variants.begin(); it != variants.end(); ++it) {
+        if (allOther(it->getKeys().getKeys())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool variantExistsFor(const std::vector<Variant>& variants,
                       const std::vector<UnicodeString>& keys) {
+    // Special case: it's OK to omit the 'other' variant if a '*'
+    // variant is present (which is checked separately.)
+    if (allOther(keys)) {
+        return true;
+    }
+
     for (auto it = variants.begin(); it != variants.end(); ++it) {
         const std::vector<Key> sKeys = it->getKeys().getKeys();
         if (sKeys.size() != keys.size()) {
@@ -478,11 +516,16 @@ Actual size: {}\nExpected size: {}\n", permutations.size(), expectedPerms));
 #endif
 
     bool allOK = true;
+    // It's OK if a variant all of whose keys are `other` is missing
+    int32_t expectedSize = permutations.size() + 1;
+    if (missingOtherVariant(variants)) {
+        expectedSize--;
+    }
+
     // Check that the number of variants == the number of permutations plus 1
-    if (variants.size() != permutations.size() + 1) {
+    if (variants.size() != expectedSize) {
         log(format("Incorrect number of variants; there are {} and should\
- be {} including the wildcard variant.",
-                        variants.size(), permutations.size() + 1));
+ be {} including the wildcard variant.", variants.size(), expectedSize));
         allOK = false;
     }
 
